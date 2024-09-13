@@ -1,0 +1,125 @@
+Código em system verilog
+
+module factorial_calculator(
+    input logic clk,
+    input logic rst,
+    input logic start,
+    input logic [7:0] i,
+    output logic ready,
+    output logic done_tick,
+    output logic [15:0] f
+);
+
+    typedef enum {idle, load, calculate, done} state_type;
+
+    state_type state_reg, state_next;
+
+    logic [15:0] res_reg, res_next;
+    logic [7:0] count_reg, count_next;
+
+    // Registradores da FSM
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state_reg <= idle;
+            res_reg <= 16'd1;
+            count_reg <= 8'd0;
+        end else begin
+            state_reg <= state_next;
+            res_reg <= res_next;
+            count_reg <= count_next;
+        end
+    end
+
+    // Lógica do próximo estado
+    always_comb begin
+        state_next = state_reg;
+        ready = 1'b0;
+        done_tick = 1'b0;
+        res_next = res_reg;
+        count_next = count_reg;
+
+        case (state_reg)
+            idle: begin
+                ready = 1'b1;
+                if (start) begin
+                    res_next = 16'd1;
+                    count_next = i;
+                    state_next = load;
+                end
+            end
+
+            load: begin
+                state_next = calculate;
+            end
+
+            calculate: begin
+                if (count_reg == 8'd0) begin
+                    state_next = done;
+                end else begin
+                    res_next = res_reg * count_reg;
+                    count_next = count_reg - 8'd1;
+                end
+            end
+
+            done: begin
+                done_tick = 1'b1;
+                state_next = idle;
+            end
+
+            default: state_next = idle;
+        endcase
+    end
+
+    assign f = res_reg;
+
+endmodule
+
+
+Código em Testbench
+
+module tb_factorial_calculator;
+    logic clk, rst, start;
+    logic [7:0] i;
+    logic ready, done_tick;
+    logic [15:0] f;
+
+    factorial_calculator uut (
+        .clk(clk),
+        .rst(rst),
+        .start(start),
+        .i(i),
+        .ready(ready),
+        .done_tick(done_tick),
+        .f(f)
+    );
+
+    // Gerador de clock
+    always #5 clk = ~clk;
+
+    initial begin
+        $dumpfile("factorial_waveform.vcd");
+        $dumpvars(0, tb_factorial_calculator);
+
+        // Inicialização
+        clk = 0;
+        rst = 1;
+        start = 0;
+        i = 8;
+
+        // Aplicação do reset
+        #10 rst = 0;
+
+        // Início do cálculo do fatorial
+        #10 start = 1;
+        #10 start = 0;
+
+        // Espera pelo cálculo
+        wait(done_tick);
+
+        // Verifica o resultado
+        $display("Input: %d, Fatorial: %d", i, f);
+
+        // Finalização
+        #10 $finish;
+    end
+endmodule
